@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/${{ inputs.denylist-repo }}/contents/${{ inputs.denylist-path }}" \
-            -H 'Accept: application/octet-stream' > "$RUNNER_TEMP/sure-denylist.txt"
+            -H 'Accept: application/vnd.github.raw+json' > "$RUNNER_TEMP/sure-denylist.txt"
           echo "SUN_DENYLIST=$RUNNER_TEMP/sure-denylist.txt" >> "$GITHUB_ENV"
           echo "Loaded private filter terms (contents are not logged)."
 
