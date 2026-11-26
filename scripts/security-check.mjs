@@ -143,6 +143,9 @@ function luhnValid(digits) {
 
 /** Show enough to locate a finding without printing the secret itself. */
 function redact(match) {
+  // Opt-in, local-only: prints the exact match so a reviewer can write an
+  // ALLOW entry. Never enable this in CI — default output stays redacted.
+  if (process.env.SURE_SHOW_MATCH === '1') return match
   if (match.length <= 8) return `${match.slice(0, 2)}…`
   return `${match.slice(0, 4)}…${match.slice(-2)} (${match.length} chars)`
 }
