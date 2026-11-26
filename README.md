@@ -19,7 +19,7 @@ the other's content.
 
 ## Using the gate
 
-In a project's `.github/workflows/security.yml`:
+In a workflow such as `.github/workflows/ci-gate.yml` (the filename is up to the caller):
 
 ```yaml
 name: Security gate
