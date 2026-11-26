@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Commercial
+# Project lextelligent
+name: Sure security gate
+
+# Reusable gate: public structural rules live in this repo, private filter
+# terms are fetched at runtime from sure-master. Callers pin this workflow by
+# commit SHA, so neither the code nor the term list can change silently.
+on:
+  workflow_call:
+    inputs:
+      gate-ref:
+        description: Commit SHA of sure-ci-gate whose scanner to run
+        type: string
+        required: true
+      denylist-repo:
+        description: Private repo holding the term list
+        type: string
+        required: false
+        default: ShingWong/sure-master
+      denylist-path:
+        description: Path to the term list inside denylist-repo
+        type: string
+        required: false
+        default: security/denylist.txt
+    secrets:
+      denylist-token:
+        description: Token with read access to denylist-repo (private)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: keys, credentials, PII, IPs, hosts, private terms
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the calling repository
+        uses: actions/checkout@v6
+
+      - name: Check out the pinned gate
+        uses: actions/checkout@v6
+        with:
+          repository: ShingWong/sure-ci-gate
+          ref: ${{ inputs.gate-ref }}
+          path: .sure-ci-gate
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Detect private denylist token
+        id: token
+        env:
+          HAS_TOKEN: ${{ secrets.denylist-token != '' }}
+        run: echo "present=$HAS_TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch private filter terms
+        if: steps.token.outputs.present == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.denylist-token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${{ inputs.denylist-repo }}/contents/${{ inputs.denylist-path }}" \
+            -H 'Accept: application/octet-stream' > "$RUNNER_TEMP/sure-denylist.txt"
+          echo "SUN_DENYLIST=$RUNNER_TEMP/sure-denylist.txt" >> "$GITHUB_ENV"
+          echo "Loaded private filter terms (contents are not logged)."
+
+      - name: Structural scan only
+        if: steps.token.outputs.present != 'true'
+        run: echo "::warning::SURE_SECURITY_TOKEN is not set — private filter terms were not checked"
+
+      - name: Scan calling repository
+        env:
+          SURE_SCAN_ROOT: ${{ github.workspace }}
+        run: node .sure-ci-gate/scripts/security-check.mjs
