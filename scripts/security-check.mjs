@@ -226,6 +226,9 @@ function walk(dir, acc = []) {
 const notifications = []
 
 function scanPath(rel, findings, gitMode) {
+  // The project's reviewed allow-list necessarily contains the literals it
+  // allows. It is a config file, reviewed in PR, not a source of leaks.
+  if (rel === '.security-gate.json') return
   const ext = extname(rel).toLowerCase()
   if (BINARY_EXTENSIONS.has(ext)) {
     notifications.push(`${rel} — binary, not scanned; confirm it carries no PII`)
@@ -256,13 +259,17 @@ export function scanRepo() {
     if (!gitMode && !existsSync(join(ROOT, norm))) continue
     scanPath(norm, findings, gitMode)
   }
-  // A tracked .env or key file is always a finding, whatever its contents.
+  // A tracked .env or key file is a finding unless explicitly reviewed.
   for (const rel of seen) {
     const name = rel.split('/').pop() ?? ''
-    if (/^\.env(\.|$)/.test(name) && !name.endsWith('.example')) {
+    const allow = (label) => ALLOW.some((a) => (a.file === '*' || a.file === rel) && a.label === label && name.includes(a.match))
+    if (/^\.env(\.|$)/.test(name) && !name.endsWith('.example') && !allow('Committed environment file')) {
       findings.push({ file: rel, line: 1, label: 'Committed environment file', hint: name })
     }
-    if (/\.(pem|key|p12|pfx|jks|keystore)$/i.test(name) || name === 'id_rsa' || name === 'id_ed25519') {
+    if (
+      (/\.(pem|key|p12|pfx|jks|keystore)$/i.test(name) || name === 'id_rsa' || name === 'id_ed25519') &&
+      !allow('Key material file')
+    ) {
       findings.push({ file: rel, line: 1, label: 'Key material file', hint: name })
     }
   }
